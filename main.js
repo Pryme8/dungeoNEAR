@@ -14,7 +14,29 @@ dungeon = function(args){
 	this.noise = args.baseNoise;
 	this.zSize= args.zSize;
 	this.zDiv = args.zDiv;
-	this._createRefMap();
+	this._loadTileMap('./tile-set-1.jpg');
+	
+};
+
+dungeon.prototype._loadTileMap = function(url){
+		var self = this;
+		
+		var img = new Image();
+		
+        img.onload = function () {
+			self.baseTileMap = this;
+			 var imgCvas = document.createElement('canvas');
+			imgCvas.width = img.width;
+			imgCvas.height = img.height;
+			var ctx = imgCvas.getContext('2d');
+            //draw background image
+            ctx.drawImage(this, 0, 0);
+			self.tileMapCtx = imgCvas.getContext('2d');
+			self._createRefMap();	
+        };
+			
+		img.src = url;
+		
 };
 
 dungeon.prototype._createRefMap = function(){
@@ -83,7 +105,7 @@ dungeon.prototype._calculateMap = function(){
 		ctx.strokeStyle = "rgba(255,0,0,0.2)";	
 		ctx.strokeRect(X,Y,this.zSize,this.zSize);
 		
-		var imgData = ctx.getImageData(X,Y,this.zSize,this.zSize);
+		var imgData = this.tileMapCtx.getImageData(X,Y,this.zSize,this.zSize);
 		
 		map[i].imgData = imgData;
 		map[i].x = X;
