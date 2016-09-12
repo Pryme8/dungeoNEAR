@@ -1,0 +1,258 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>DungeoNEAR?</title>
+<link href="./index.css" rel="stylesheet" type="text/css" />
+<script type="text/javascript" src="./dN.1.2.1.js"></script>
+<script type="text/javascript" src="./main.js"></script>
+</head>
+<body>
+<h1>Experiments in Procedural Level Creation</h1>
+<hr />
+<h2>Introduction</h2>
+<p>After working on doing some texture synthesis, a method for creating dungeons and other content kinda just smacked me in the face.  I have been itching for about two days now to get a chance to do this.  The night I thought it up the write up went as follows:</p>
+<p>A <strong>Zone (Z)</strong> is defined as a area of set units that is divided into a set amount of <strong>Cells (C)</strong>.  For this deployment I will be dividing the
+Z into a 3 by 3 grid with the labeling of each cell as follows starting from the top left; n10, n00, n01, m10, m00, m01, s10, s00, s01.  Because I am using a that is being split into thirds to keep things simple I will define the size of the zone always to something divisible by 3, for general purposes I will always use a Z size of 60 by 60 making each cell 20^2 pxls.  Because we will be averaging the black and white value of the cells we limit the size of the zones to be as small as possible but still large enough to have defined details.  The larger our Zones the larger the calculation overhead.</p>
+<p>Once my Zone method and size is established and I have defined the cells for it, I have to calculate every possible state of the Zone and output that to a human readable jpg.  This is achieved by looping through combination sets of the cells, and creating a single array of all states, then use that information to generate a canvas with the correct cells displayed as black and white on or off state.</p>
+<p>After the human readable jpg is produced, reload our now created Zone map into the program and associate each zone's location information on the map and cell state information into a referenceable and searchable array or object.
+At this point I can start choosing my method for a base noise, because each Zone will only be 60 by 60 I believe my Worley2D noise from my Das_Noise library will work just fine, if there is a calculation lag on the generation of the zones due to the noise, I will see about moving to a modified SimpleX.  Starting from the top left of the visible stage, we calculate the values for the base noise by passing it to our zone object and averaging the values of each cells black white ratio due to the noise, and round to 0 or 1 effectively converting the noise to a Zone similar to the ones I generated earlier.  Loop through the map object,
+and find out which zone matches the closest to the new noise zone.
+</p>
+<p>The point of first creating a human readable image instead of just having the noise be manipulated is that after we get a look for the base layout that we want, an artist can use the human readable image as a template to draw a secondary reference image that has the same dimensions as our reference map.  I could then load image data into the map object from the secondary reference image and output the fancy tiles instead of just black and white.  This process could also be extended to use secondary noise calculations to establish and simulate different biomes and altitudes, changing what tile map is referenced.</p>
+<p>This is all theory but it sounds about right so I'm gonna give it a shot.</p>
+<h2>The Reference Map</h2>
+<p>Diving right in I think the smartest thing to do will be to create my first reference map, or the human readable map I described earlier.  The first day I thought of this I tried to make it by hand in illustrator and got about 32 combinations in before I realized that was dumb, and it was time to make canvas go to work.</p>
+<p>First we need to calculate the combinations of the cells and make something that we can use to output a physical reference map.  What I mean by combinations is if we had an input of [1, 2, 3] the output would look like =>123,213,132,232,312,321....  There are lots of ways to do this, but I will try to keep it simple.  Because order does not matter, we do not have to worry about permutations (the same combination in a different order).</p>
+<p>This script to make it happen is as follows:
+<pre title="creating combinations:"><xmp>dungeon = function(args){
+    args = args || {};
+    args.zSize = args.zSize || 60;
+    args.zDiv = args.zDiv || 3;
+    this.zSize= args.zSize;
+    this.zDiv = args.zDiv;
+};
+
+dungeon.prototype._createRefMap = function(){
+    var cells = [];
+    var pCount = this.zDiv * this.zDiv;
+    
+    function perm(s,c){
+        if (c == 0) {
+        cells.push(s);
+        return;
+        }
+        perm(s+'0', c-1);
+        perm(s+'1', c-1);
+    }
+    
+    perm('',pCount);
+    
+    var last = cells.splice(cells.length-1,1);
+    cells.unshift(last+'');
+    console.log(cells);    
+};
+</xmp></pre>
+
+</p>
+<p>Just creating a new dungeon and then calling the prototype now outputs all of the permutations for a total of 512, on a side interesting note, is it also the could be looked at as every possible combination of a binary set of 9.  Looking at the structure I already know that my two most common ones I am shooting for will be all states on and all states off, so I think it would be best to take the first record and move it to the front of the array to save on calculation time once we start looping through our state array.</p>
+<h2>Zone Object</h2>
+<p>Now it is time to make a Zone Object, this will be the basis for our mapping of the noise, this makes a object that we can put in an array, and compile the states of the cell as a searchable string.  After that we will look at making a readable image.</p>
+<pre title="Zone Object:"><xmp>dungeon.Zone = function(size, div, state){
+    this.size = size;
+    this.div = div;
+    this.searchString = state;
+    this.state = state.split('');
+    this.cells = [];
+    for(var i=0; i < div*div; i++){
+        this.cells.push(0);
+    }
+    for(var i=0; i < state.length; i++){
+        var sID = parseInt(state[i],10);
+        this.cells[sID] = 1;            
+    }
+    return this;    
+};
+</xmp></pre>
+<p>I then modified my pre-existing script to the following:</p>
+<pre title="Zone Object:"><xmp>...
+    var map = [];
+    for(var i = 0; i < cells.length; i++){
+        map.push(new dungeon.Zone(this.zSize, this.zDiv, cells[i]));    
+    }
+    this.map = map;    
+    console.log(map);
+</xmp></pre>
+<p>This gives us an array on the main dungeon object that contains set of Zones with a searchable string for referencing later.  I now need to create a new function to compile the physical map and set values for where the zone object is on the output map.  This step is only necessary so that at a later time an artist can create a secondary reference map at a later time, if I just wanted black and white pxls to display I could effectively skip this step but that is not the final product I want.</p>
+<p>I also went ahead and allocated the memory for each of the zone objects to have image data as well, even though I’m just using the map image and not an artistic tile image do to the fact of 512 tiles is quite a bit of content to come up with, just for an example.  Using this function I generate my reference map that I will use as both a way to look up / store tiles and their properties; it also creates the ability for me to output a canvas with the tiles on it to make a human readable map.</p>
+<pre title="Calculate Map function:"><xmp>dungeon.prototype._calculateMap = function(){
+    var map = this.map;
+    var cvas = document.createElement('canvas');
+    var ctx = cvas.getContext('2d');
+    
+    var X = 0, Y = 0;
+    var cellSize = this.zSize/this.zDiv;
+    
+    cvas.width = 20*this.zSize;
+    cvas.height = Math.ceil(map.length/20)*this.zSize;
+    
+    for(var i = 0; i < map.length; i++){
+        var x = 0, y = 0;
+        for(var j = 0; j < map[i].cells.length; j++){
+            
+            if(map[i].cells[j] == 1){
+                ctx.fillStyle = "#FFF";
+            }else{
+                ctx.fillStyle = "#000";
+            }
+            
+            ctx.fillRect(x+X,y+Y,cellSize,cellSize);
+
+            x+=cellSize;
+            if(x > this.zSize-cellSize){
+                y+=cellSize;
+                x=0;
+            }
+        };
+        
+        ctx.strokeStyle = "rgba(255,0,0,0.2)";    
+        ctx.strokeRect(X,Y,this.zSize,this.zSize);
+        
+        var imgData = ctx.getImageData(X,Y,this.zSize,this.zSize);
+        
+        map[i].imgData = imgData;
+        map[i].x = X;
+        map[i].y = Y;
+                
+        X+=this.zSize;
+        if(X > cvas.width-this.zSize){
+            Y+=this.zSize;
+            X=0;
+        }
+    };
+};
+</xmp></pre>
+<p>Now it's time to start generating a noise, and see if we can kick this thing into gear and output a dungeon like structure.  Later I will research into making the ability for you to draw on the base noise and see the overlay tiles update accordingly, this would be cool for later development I think, but is something that is down the road a little bit.
+<p>Also <a href='./ref-example.png' target="_blank">CLICK HERE</a> for an Example of the Reference Map</p>
+<h2>Enter Das_Noise</h2>
+<p>Ok so now the next step will be to generate a base noise map to start sampling, and outputting out maps imageData in the correct areas and see what kind of output I can get.  I'm assuming this should go without much hitch and with a well set up noise will structure itself to resemble a dungeon right of the bat (I hope).</p>
+<p>I want to use a good sized chebyshev style Worley Noise to start because I believe this will have a good look to it once overlaid, and will guarantee that most if not all the rooms connect.  If you are not familiar with my Das_Noise library you can check it out here: <a href='http://pryme8.github.io/Das_Noise' target="_blank">http://pryme8.github.io/Das_Noise</a></p>
+
+<p><div style="float:left; margin-right:1em;"><canvas id='noise-canvas' width="600" height="600" style="border:1px solid #aaa;"></canvas></div>
+<p>To test the noise I am going to output on a 600 by 600 pxl canvas the noise till I get something acceptable. When I go to use it, i will not have to create the noise to any sort of output, but rather just check its values at certain locations then parse that how ever is needed to see what cells are active or not in that zone.
+Already looking at this noise, we can visualize what the dungeon will look like if the calculations have been set up correctly.  The next step is to identify the what each zone on the noise matches up to on our reference map, to see this in action click the link below to do one zone at a time on our canvas to the left.<br />
+<br />
+<a href='#' id='gen-zone'>Generate Zone</a>
+</p>
+<br style="clear: both;" />
+</p>
+<p>Ohhh yeah, that works! Ok so I think I will wrap it up on this, but first here is a look at how I am iding the zone of the noise.</p>
+<pre title="Calculate Map function:"><xmp>dungeon.prototype._idNoise = function(x,y,noise){
+    if(typeof noise ==='undefined'){
+    noise = this.noise;    
+    }
+    var cellSize = this.zSize/this.zDiv;
+    
+    var string = '';
+    var self = this;
+    var ctx = (document.getElementById('noise-canvas')).getContext('2d');
+        ctx.fillStyle = "red";
+        
+        var cX = 0;
+        var cY = 0;
+    
+    for(var i=0; i<this.zDiv*this.zDiv; i++){
+        var t = 0;
+
+        for(var pY = 0; pY < cellSize; pY++){
+            for(var pX = 0; pX < cellSize; pX++){
+                t+=noise.getValue({x:(pX+(this.zSize*x)+(cellSize*cX)),
+                                   y:(pY+(this.zSize*y)+(cellSize*cY))});
+                                    
+            }
+        }
+        
+        t/=(cellSize*cellSize);
+        if(t<0.45){
+        string+=0+"";
+        }else{
+        string+=1+"";
+        }
+
+        cX++;
+        if(cX>this.zDiv-1){
+        cX=0;
+        cY++;
+        }
+    }
+
+    for(var i=0; i<this.map.length; i++){
+        if(this.map[i].searchString == string){
+            return this.map[i];
+        }
+    };
+};
+</xmp></pre>
+<h2>Conclusion...</h2>
+<p>This was all literally done in one day intermittently while I cleaned the house... so yeah I think this is a valid and good approach for what I want to achieve.  I will have to experiment with different noise types styles and scales and then come up with a nice tileset for it (I will prolly jack RPG maker resources for now).  I think once this is deployed a little more the possibilities will be extensive.</p>
+<p>I will be posting a simple Canvas Game based on this principle at some point!</p><BR/><BR/>
+<p>Resources and References : None… I just made this crap up... if you have any questions <a href='mailto:pryme8@gmail.com'>Pryme8@gmail.com</a>.</p><BR/><BR/><BR/><BR/>
+<script>document.addEventListener( 'DOMContentLoaded', function () {
+var cvas = document.getElementById('noise-canvas');
+var ctx = cvas.getContext('2d');
+ctx.fillRect(0,0,cvas.width,cvas.height);
+var imageData = new ImageData(cvas.width, cvas.height);
+var data = imageData.data;
+var x=1,y=1;
+var r,g,b,a,v;
+var noise = new dN('Worley2','dungeon1',{n:8, style:'chebyshev', frequency:0.35, nPoints:4});
+for (var i = 0; i < data.length; i += 4) {
+    v = noise.getValue({x:x,y:y});
+    //console.log(v);
+    r = Math.floor(255 * v);
+    g = r;
+    b = r;
+    a = Math.floor(255);    
+    
+      data[i]     = r; // red
+      data[i + 1] = g; // green
+      data[i + 2] = b; // blue
+      data[i + 3] = a;//alpha
+     
+      x++;
+      if(x>cvas.width){
+          y++;
+        x=1;
+        continue;
+      }
+    }
+ctx.putImageData(imageData, 0, 0, 0, 0, cvas.width, cvas.height);
+
+d = new dungeon({baseNoise:noise});
+
+var eX = 0, eY = 0;
+var genZone = document.getElementById('gen-zone');
+genZone.onclick = function(e){
+    e.preventDefault();
+    
+    if(eY<10){
+    var zone = d._idNoise(eX,eY,d.noise);
+    ctx.putImageData(zone.imgData, eX*d.zSize,eY*d.zSize,0,0,60,60);
+    
+    eX++;
+    if(eX>9){
+    eX=0;
+    eY++;
+    }
+    }
+};
+
+
+
+});
+</script>
+
+</body>
+</html>
+
+
