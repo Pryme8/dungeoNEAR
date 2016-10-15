@@ -1,0 +1,365 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>3d Land</title>
+
+<style>
+@import 'https://fonts.googleapis.com/css?family=Roboto';
+  html, body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    font-size:18px;
+    font-family: 'Roboto', sans-serif;
+  }
+ 
+  .pwrap{
+        display:block;
+        position:relative;
+        width:900px;
+        min-height:100%;
+        height:auto;
+        margin-left:50%;
+        padding-bottom:1.5em;
+         top:0;
+         transform:translateX(-50%);
+  }
+ 
+  .cwrap{
+  display:inline-block;
+  position:relative;
+  width:600px;
+  height:600px;
+  border:1px solid #444;
+  }
+
+  .bjsCvas {
+    width: 100%;
+    height: 100%;
+    touch-action: none;
+  }
+ 
+  .controls{
+    display: inline-block;
+    vertical-align: top;
+    padding-left: 1em;
+  }
+ 
+  .foot{
+    display:block;
+    background:#444;
+    position:relative;  
+    width:100%;
+    height:340px;
+  }
+ 
+ 
+  .pUI{
+    background-color:rgba(90, 50, 90, 0.8);
+    min-height:1em;
+    border: 1px solid rgb(20, 50, 100);
+    font-size:12px;
+      }
+ 
+  .pUI input{
+display: inline-block;
+width: calc(25% - 2px);
+margin: 0;
+padding: 0;
+vertical-align: bottom;
+margin-bottom: -1px;
+height: calc(1em + 1px);
+    }
+  .pUI .input-wrap{
+   text-align: right;
+    white-space: nowrap;
+  }
+   .pUI .input-wrap::before{
+      display: block;
+      position: relative;
+   content: attr(title);
+   text-align: left;
+     margin: 0.1em;
+     margin-bottom: -0.1em;
+     color:white;
+    }
+
+.slider-wrap{
+  display: inline-block;
+  position:relative;
+  width:calc(75% - 0.2em - 1px);
+  height: calc(1em + 0.2em - 2px);
+  cursor: pointer;
+  vertical-align: bottom;
+  border: 1px solid #fff;
+}
+
+.slider-wrap span{
+    position:absolute;
+    display:block;
+    height:100%;
+    background:#444;
+    pointer-events:none;
+}
+
+.pUI .label{
+  margin-bottom: 0em;
+  line-height: 1.2em;
+  color:#eee;
+  border-bottom: 1px solid #aaa;
+  background: rgba(0,0,0,0.1);
+  font-weight: bold;
+  letter-spacing: 0.1em;
+}
+
+.pUI hr{
+  margin-bottom: 0;
+}
+</style>
+<script type="text/javascript" src="./dN.1.2.2.js"></script>
+<script type="text/javascript" src="./babylon.js"></script>
+</head>
+<body>
+<div class="pwrap">
+<center><div class='cwrap'><canvas id='output' class='bjsCvas' width='600' height='600'> </canvas></div><div class='cwrap'><canvas id='c3d' class='bjsCvas'> </canvas></div></center>
+</div>
+
+
+<div class="foot"></div>
+<script>
+document.addEventListener( 'DOMContentLoaded', function () {    
+    GUI = function(id, args, scene, engine){
+        this.id = id || 'UI_' + document.getElementsByClassName('pUI').length;
+        this.args = args || {};
+        this._target = document.getElementById(this.args.target) || document.body;
+		this.scene = scene;
+		this.engine = engine;
+        
+        if(typeof scene !== 'object' || typeof engine !== 'object'){return};
+        this.DOM = [];
+        
+        this.mainBlock = document.createElement('div');
+        this.mainBlock.setAttribute('id', this.id);
+        this.mainBlock.setAttribute('class', 'pUI');
+        
+        
+        if(typeof this.args.width !== 'undefined'){
+                this.mainBlock.style.width = this.args.width;
+        }
+        if(typeof this.args.height!== 'undefined'){
+                this.mainBlock.style.height = this.args.height;
+        }
+        if(typeof this.args.position == 'string'){
+                this.mainBlock.style.position = this.args.position;
+        }else{
+                this.mainBlock.style.position = 'absolute';
+        }
+        
+        this._target.appendChild(this.mainBlock);
+                
+        return this;
+    };
+    
+    GUI.prototype.Create = function(type, args){
+        args = args || {};
+        var newElement = new type(this,args);
+        this.DOM.push(newElement);
+        return newElement;
+    
+    };
+    
+    GUI.breakline = function(parent, args){
+        var hr = document.createElement('hr');
+        parent.mainBlock.appendChild(hr);
+        return hr;
+    };
+    GUI.label = function(parent, args){
+        var label = document.createElement('div');
+        label.innerHTML = args.text || "New-Label";
+        label.setAttribute('class', 'label');
+        parent.mainBlock.appendChild(label);        
+        return label;
+    };
+    
+    
+    GUI.input = function(parent, args){
+        args = args || {};
+        args.wrap = args.wrap || {};
+        this.wrap = args.wrap || {};
+        this.wrap.type = args.wrap.type || 'div';
+        this.parent = parent;
+        var self = this;
+        if(this.wrap.type !== 'span' && this.wrap.type !== 'div'){this.wrap.type = 'div'};
+        this.wrap.obj = document.createElement(this.wrap.type);
+        this.obj = document.createElement('input');
+        this.id = args.title || 'Input'+ document.getElementsByClassName('pIn').length;
+        this.obj.setAttribute('id', this.id);
+        this.wrap.obj.appendChild(this.obj);
+        this.parent.mainBlock.appendChild(this.wrap.obj);    
+        this.wrap.obj.setAttribute('class', 'input-wrap pIn');    
+        this.wrap.obj.setAttribute('title', this.id);
+        this.obj.setAttribute('value', args.value || '');
+        if(typeof args.min != 'undefined'){
+            this.min = args.min;
+        this.obj.setAttribute('min', args.min);    
+        }
+        if(typeof args.max != 'undefined'){
+            this.max = args.max;
+        this.obj.setAttribute('max', args.max);    
+        }
+        if(typeof args.step != 'undefined'){
+            this.step = args.step;
+        this.obj.setAttribute('step', args.step);    
+        }
+        
+        
+        return this;
+    };
+    
+
+    
+
+    
+    GUI.slider = function(parent, args){        
+        GUI.input.call(this, parent, args);    
+        this.wrap.obj.innerHTML = '<div class="slider-wrap"><span id="slider-wrap-'+this.id+'"></span></div>'+this.wrap.obj.innerHTML;
+        this.slide = document.getElementById('slider-wrap-'+this.id);
+        document.getElementById(this.id).type = 'number';
+        this._update();
+        var self = this;
+        document.getElementById(this.id).onchange = function(){
+            self._update();
+        };
+        
+        this.slide.parentNode.onclick = function(e){
+            var t = e.target;
+            var tsize = t.getBoundingClientRect();
+            var X = e.pageX - tsize.left;
+            var p = X/tsize.width;
+            var value = self.max*p;
+            console.log(value.toFixed(2));
+            document.getElementById(self.id).value = value.toFixed(2);
+            self._update();            
+        };
+            
+        return this;
+    };
+    
+    GUI.slider.prototype.constructor = GUI.slider;
+    
+    GUI.slider.prototype._update = function(){
+        this.value = document.getElementById(this.id).value;
+        //console.log(currentVal);
+        var p = this.max/this.value;
+        p = ((this.wrap.obj.getElementsByClassName("slider-wrap")[0].getBoundingClientRect()).width-2)/p;
+        this.slide.style.width = p+'px';
+            
+        if(typeof this.callback === 'function'){
+            this.callback(this);
+        }
+    };
+	
+	var baseNoise = new dN('Perlin2','landbase',{scale:500, octave:4, persistence:0.85, amplitude:0.8});
+	var overNoise = new dN('Perlin2','overlay',{scale:100, octave:3, persistence:0.5, amplitude:0.6});
+	var eleNoise = new dN('Simple2','overlay',{scale:1000, octave:6, persistence:0.5, amplitude:0.6});
+	
+	
+	var cvas = document.getElementById('output');
+	var ctx = cvas.getContext('2d');
+	var imageData = new ImageData(cvas.width, cvas.height);
+	var data = imageData.data;
+	var x=1,y=1;
+	var r,g,b,a,v;
+	
+	for (var i = 0; i < data.length; i += 4) {
+    v = dN.filter.terrace(dN.Mix(dN.filter.terrace(baseNoise.getValue({x:x,y:y}),[[0.1,0.2],[0.35,0.45], [0.5,0.55], [0.7,0.73]],0.8), overNoise.getValue({x:x,y:y}),0.5), [[0.1,0.2],[0.35,0.45], [0.5,0.55], [0.7,0.73]],0.8);
+	//console.log(v);
+    r = Math.floor(255 * v),
+    g = r,
+    b = r,
+    a = 255;    
+    
+      data[i]     = r; // red
+      data[i + 1] = g; // green
+      data[i + 2] = b; // blue
+      data[i + 3] = a;//alpha
+     
+      x++;
+      if(x>cvas.width){
+          y++;
+        x=1;
+        continue;
+      }
+    }
+ctx.putImageData(imageData, 0, 0, 0, 0, cvas.width, cvas.height);
+
+
+   	  var c1 = document.getElementById("c3d");
+      // Load the BABYLON 3D engine
+      var e1 = new BABYLON.Engine(c1, true);
+      // -------------------------------------------------------------
+      // Here begins a function that we will 'call' just after it's built
+      var createScene = function () {
+         // Now create a basic Babylon Scene object
+         var scene = new BABYLON.Scene(e1);
+         // Change the scene background color to green.
+         scene.clearColor = new BABYLON.Color3(0.35, 0.2, 0.35);
+         // This creates and positions a free camera
+         var camera = new BABYLON.FreeCamera("camera1", new BABYLON.Vector3(0, 25, -100), scene);
+         // This targets the camera to scene origin
+         camera.setTarget(BABYLON.Vector3.Zero());
+         // This attaches the camera to the canvas
+        	camera.attachControl(c1, false);
+         // This creates a light, aiming 0,1,0 - to the sky.
+         var light = new BABYLON.HemisphericLight("light1", new BABYLON.Vector3(0, 1, 0), scene);
+         // Dim the light a small amount
+         light.intensity = .5;
+
+         // Let's try our built-in 'ground' shape. Params: name, width, depth, subdivisions, scene
+         var ground = BABYLON.Mesh.CreateGround("block" , 400, 400, 450, scene, true);
+		 
+		 var vertexData = ground.getVerticesData(BABYLON.VertexBuffer.PositionKind);
+		 ground.material = new BABYLON.StandardMaterial("texture1", scene);
+		 ground.material.wireframe = true;
+				
+				
+					for (var i = 0; i < vertexData.length; i += 3) {
+						var x = vertexData[i], y = vertexData[i+1],z = vertexData[i+2];
+						var vb = eleNoise.getValue({x:x,y:z})*80;
+						var v = dN.filter.terrace(dN.Mix(dN.filter.terrace(baseNoise.getValue({x:x,y:z}),[[0.1,0.2],[0.35,0.45], [0.5,0.55], [0.7,0.73]],0.8), overNoise.getValue({x:x,y:z}),0.5), [[0.1,0.2],[0.35,0.45], [0.5,0.55], [0.7,0.73]],0.8) * 40;
+							v = (v + vb)/2;
+							vertexData[i+1] += v;
+						
+						
+					}
+					
+			 ground.updateVerticesData(BABYLON.VertexBuffer.PositionKind, vertexData, 0, 0);
+		 
+		 
+         // Leave this function
+         return scene;
+      }; // End of createScene function
+      // -------------------------------------------------------------
+      // Now, call the createScene function that you just finished creating
+      var s1 = createScene();
+
+      // Register a render loop to repeatedly render the scene
+      e1.runRenderLoop(function () {
+         s1.render();
+      });
+
+
+
+ document.body.onkeypress = function(e){
+	e.preventDefaults();
+ };
+
+	
+});
+</script>
+</body>
+</html>
+
+

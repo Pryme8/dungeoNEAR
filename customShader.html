@@ -1,0 +1,407 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>Shader_Work</title>
+
+   <style>
+      html, body {
+         overflow: hidden;
+         width: 100%;
+         height: 100%;
+         margin: 0;
+         padding: 0;
+      }
+      #renderCanvas {
+         width: 100%;
+         height: 100%;
+         touch-action: none;
+      }
+   </style>
+   
+	<script src="./js/jquery-2.2.0.min.js"></script>
+    <script src="./js/hand.base.js"></script>
+    <script src="./js/hand.css.js"></script>
+    <script src="http://cdn.jsdelivr.net/babylonjs/2.4/babylon.min.js" ></script>
+
+</head>
+<body>
+   <canvas id="renderCanvas"></canvas>
+   <script type="text/javascript">
+
+   
+      var canvas = document.querySelector("#renderCanvas");
+      var engine = new BABYLON.Engine(canvas, true);
+      // -------------------------------------------------------------
+
+      var createScene = function () {
+
+         var scene = new BABYLON.Scene(engine);
+
+         scene.clearColor = new BABYLON.Color3(0.2, 0.1, 0.1);
+
+         var camera = new BABYLON.FreeCamera("camera1", new BABYLON.Vector3(0, 10, -6), scene);
+
+         camera.setTarget(BABYLON.Vector3.Zero());
+
+         camera.attachControl(canvas, false);
+		  var light = new BABYLON.HemisphericLight("light1", new BABYLON.Vector3(20, 100, 50), scene);
+
+         light.intensity = .5;
+		
+		 BABYLON.Effect.ShadersStore["customVertexShader"]=                "precision highp float;\r\n"+
+
+                "// Attributes\r\n"+
+                "attribute vec3 position;\r\n"+
+                "attribute vec3 normal;\r\n"+
+                "attribute vec2 uv;\r\n"+
+
+                "// Uniforms\r\n"+
+                "uniform mat4 world;\r\n"+
+                "uniform mat4 worldViewProjection;\r\n"+
+
+                "// Varying\r\n"+
+                "varying vec3 vPositionW;\r\n"+
+                "varying vec3 vNormalW;\r\n"+
+                "varying vec2 vUV;\r\n"+
+				"varying vec3 lPosition;\r\n"+
+
+
+                "void main(void) {\r\n"+
+                "    vec4 outPosition = worldViewProjection * vec4(position, 1.0);\r\n"+
+                "    gl_Position = outPosition;\r\n"+
+                "    \r\n"+
+                "    vPositionW = vec3(world * vec4(position, 1.0));\r\n"+
+				"    lPosition = position;\r\n"+
+                "    vNormalW = normalize(vec3(world * vec4(normal, 0.0)));\r\n"+
+                "    \r\n"+
+                "    vUV = uv;\r\n"+
+                "}\r\n";
+
+                BABYLON.Effect.ShadersStore["customFragmentShader"]=                "precision highp float;\r\n"+
+
+                "// Lights\r\n"+
+                "varying vec3 vPositionW;\r\n"+
+                "varying vec3 vNormalW;\r\n"+
+                "varying vec2 vUV;\r\n"+
+				"varying vec3 lPosition;\r\n"+
+
+                "// Refs\r\n"+
+                "uniform sampler2D floorTexture;\r\n"+
+				"uniform sampler2D wallTexture;\r\n"+
+				"float wallHeight;\r\n"+
+
+                "void main(void) {\r\n"+
+                "    vec3 color =  texture2D(wallTexture, vUV).rgb;\r\n"+
+				"   float xW = vUV.x - floor(vUV.x);  \r\n"+
+				"   float yW = vUV.y - floor(vUV.y); \r\n"+
+				"   vec2 nUV = vec2(xW,yW);"+
+				"    if(vNormalW.y > 0.0 && lPosition.y == 0.0){color = texture2D(floorTexture, nUV).rgb;}\r\n"+
+				//"    if(vNormalW.x != 0.0 || vNormalW.z != 0.0){color = texture2D(wallTexture, vUV).rgb;}\r\n"+
+		
+
+         
+		/*		
+	"float ToonThresholds[4];\r\n"+
+    "ToonThresholds[0] = 0.95;\r\n"+
+    "ToonThresholds[1] = 0.5;\r\n"+
+    "ToonThresholds[2] = 0.2;\r\n"+
+    "ToonThresholds[3] = 0.03;\r\n"+
+    
+    "float ToonBrightnessLevels[5];\r\n"+
+    "ToonBrightnessLevels[0] = 1.0;\r\n"+
+    "ToonBrightnessLevels[1] = 0.8;\r\n"+
+    "ToonBrightnessLevels[2] = 0.6;\r\n"+
+    "ToonBrightnessLevels[3] = 0.35;\r\n"+
+    "ToonBrightnessLevels[4] = 0.2;\r\n"+
+    
+    "vec3 vLightPosition = vec3(-10.0,100.0,50.0);\r\n"+
+    
+    // Light
+    "vec3 lightVectorW = normalize(vLightPosition - vPositionW);\r\n"+
+    
+    // diffuse
+    "float ndl = max(0., dot(vNormalW, lightVectorW));\r\n"+
+	"if (ndl > ToonThresholds[0])\r\n"+
+    "{\r\n"+
+        "color *= ToonBrightnessLevels[0];\r\n"+
+    "}\r\n"+
+    "else if (ndl > ToonThresholds[1])\r\n"+
+    "{\r\n"+
+        "color *= ToonBrightnessLevels[1];\r\n"+
+    "}\r\n"+
+    "else if (ndl > ToonThresholds[2])\r\n"+
+    "{\r\n"+
+       "color *= ToonBrightnessLevels[2];\r\n"+
+    "}\r\n"+
+    "else if (ndl > ToonThresholds[3])\r\n"+
+    "{\r\n"+
+        "color *= ToonBrightnessLevels[3];\r\n"+
+    "}\r\n"+
+    "else\r\n"+
+    "{\r\n"+
+        "color *= ToonBrightnessLevels[4];\r\n"+
+    "}\r\n"+*/
+				
+				
+                "    gl_FragColor = vec4(color, 1.);\r\n"+
+                "}\r\n";
+
+             
+
+                // Compile
+                var shaderMaterial = new BABYLON.ShaderMaterial("shader", scene, {
+                    vertex: "custom",
+                    fragment: "custom",
+                },
+                    {
+                        attributes: ["position", "normal", "uv"],
+                        uniforms: ["world", "worldView", "worldViewProjection", "view", "projection"]
+                    });
+
+                var floorTexture = new BABYLON.Texture("./assets/textures/floor_1.jpg", scene);
+                floorTexture.wrapU = BABYLON.Texture.CLAMP_ADDRESSMODE;
+                floorTexture.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
+				shaderMaterial.setTexture("floorTexture", floorTexture);
+				var wallTexture = new BABYLON.Texture("./assets/textures/wall_1.jpg", scene);
+                wallTexture.wrapU = BABYLON.Texture.CLAMP_ADDRESSMODE;
+                wallTexture.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
+				shaderMaterial.setTexture("wallTexture", wallTexture);
+
+                //var mainTexture = new BABYLON.Texture("amiga.jpg", scene);
+
+               // 
+                //shaderMaterial.setTexture("refSampler", refTexture);
+                //shaderMaterial.setFloat("time", 0);
+               // shaderMaterial.setVector3("lightPos", light.position);
+                //shaderMaterial.backFaceCulling = false;
+				
+				
+				function hallway(){/*
+					var floorMesh = new BABYLON.Mesh("floor", scene);
+					var wallMesh = new BABYLON.Mesh("walls", scene);
+					var baseWidth = 2, baseDepth = 5, baseThickness = 0.5;
+					var wallHeight = 2, wallWidth = 0.4, wallslope = 0.2;
+					
+					
+					var wHratio = baseWidth/baseDepth;
+				
+					var positions = [			
+					//topCap
+					-baseWidth*0.5, 0, baseDepth*0.5,//0
+					-baseWidth*0.5, 0, -baseDepth*0.5,//1
+					baseWidth*0.5, 0, -baseDepth*0.5,//2
+					baseWidth*0.5, 0, baseDepth*0.5,//3
+					];	
+					var indices = [
+					0,1,2,
+					0,2,3,
+					];
+					var normals = [];
+					var uvs = [
+					0,1, 0,0, wHratio,0, wHratio,1,
+					];
+					
+					BABYLON.VertexData.ComputeNormals(positions, indices, normals);
+					
+					var vertexData = new BABYLON.VertexData();
+					vertexData.positions = positions;
+					vertexData.indices = indices; 
+					vertexData.normals = normals; 
+					vertexData.uvs = uvs;
+					vertexData.applyToMesh(floorMesh);
+					floorMesh.material = shaderMaterial;*/
+					
+					
+					var hallway = new BABYLON.Mesh("hallway", scene);
+					var baseWidth = 2, baseDepth = 5, baseThickness = 0.5;
+					var wallHeight = 2, wallWidth = 0.4, wallslope = 0.2;
+					var wHratio = baseDepth/baseWidth;
+					shaderMaterial.setFloat("wallHeight", wallHeight+baseThickness);
+					var insideUVyStart = 1-(wallHeight/(wallHeight+baseThickness));
+					var iwallHratio = baseDepth/(wallHeight+baseThickness);
+					
+					var capWidth = baseWidth+(wallWidth*2);
+					var capHeight = baseThickness+wallHeight;
+					var wallSlopeUVstop = (wallWidth-wallslope)/capWidth;
+					var wallSlopeUVstop2 = (baseWidth*0.5)/capWidth;
+					console.log(wallSlopeUVstop);
+					var capRatio = capHeight/capWidth;
+					
+					
+					var positions = [
+					//bottom
+					-baseWidth*0.5-(wallWidth+wallslope), -baseThickness, baseDepth*0.5,//0
+					-baseWidth*0.5-(wallWidth+wallslope), -baseThickness, -baseDepth*0.5,//1
+					baseWidth*0.5+(wallWidth+wallslope), -baseThickness, -baseDepth*0.5,//2
+					baseWidth*0.5+(wallWidth+wallslope), -baseThickness, baseDepth*0.5,//3
+					//topCap
+					-baseWidth*0.5, 0, baseDepth*0.5,//4
+					-baseWidth*0.5, 0, -baseDepth*0.5,//5
+					baseWidth*0.5, 0, -baseDepth*0.5,//6
+					baseWidth*0.5, 0, baseDepth*0.5,//7
+					//InsideWalls
+					-baseWidth*0.5-wallslope, wallHeight, baseDepth*0.5,//8
+					-baseWidth*0.5, 0, baseDepth*0.5,//9
+					-baseWidth*0.5, 0, -baseDepth*0.5,//10
+					-baseWidth*0.5-wallslope, wallHeight, -baseDepth*0.5,//11
+					
+					baseWidth*0.5+wallslope, wallHeight, -baseDepth*0.5,//12
+					baseWidth*0.5, 0, -baseDepth*0.5,//13
+					baseWidth*0.5, 0, baseDepth*0.5,//14
+					baseWidth*0.5+wallslope, wallHeight, baseDepth*0.5,//15
+					
+					//WallCaps
+					-baseWidth*0.5-(wallWidth+wallslope), wallHeight, baseDepth*0.5,//16
+					-baseWidth*0.5-(wallWidth+wallslope), wallHeight, -baseDepth*0.5,//17
+					-baseWidth*0.5-(wallslope), wallHeight, -baseDepth*0.5,//18
+					-baseWidth*0.5-(wallslope), wallHeight, baseDepth*0.5,//19
+
+					baseWidth*0.5+(wallslope), wallHeight, -baseDepth*0.5,//20
+					baseWidth*0.5+(wallslope), wallHeight, baseDepth*0.5,//21
+					baseWidth*0.5+(wallWidth+wallslope), wallHeight, baseDepth*0.5,//22
+					baseWidth*0.5+(wallWidth+wallslope), wallHeight, -baseDepth*0.5,//23
+					
+					//OutsideWalls
+					-baseWidth*0.5-(wallWidth+wallslope), wallHeight, baseDepth*0.5,//24
+					-baseWidth*0.5-(wallWidth+wallslope), -baseThickness, baseDepth*0.5,//25
+					-baseWidth*0.5-(wallWidth+wallslope), -baseThickness, -baseDepth*0.5,//26
+					-baseWidth*0.5-(wallWidth+wallslope), wallHeight, -baseDepth*0.5,//27
+					
+					baseWidth*0.5+(wallWidth+wallslope), wallHeight, -baseDepth*0.5,//28
+					baseWidth*0.5+(wallWidth+wallslope), -baseThickness, -baseDepth*0.5,//29
+					baseWidth*0.5+(wallWidth+wallslope), -baseThickness, baseDepth*0.5,//30
+					baseWidth*0.5+(wallWidth+wallslope), wallHeight, baseDepth*0.5,//31
+					
+					//EndCaps
+					-baseWidth*0.5-(wallWidth+wallslope), wallHeight, -baseDepth*0.5,//32
+					-baseWidth*0.5-(wallWidth+wallslope), 0, -baseDepth*0.5,//33
+					-baseWidth*0.5, 0, -baseDepth*0.5,//34
+					-baseWidth*0.5-(wallslope), wallHeight, -baseDepth*0.5,//35
+					
+					baseWidth*0.5+(wallslope), wallHeight, -baseDepth*0.5,//36
+					baseWidth*0.5, 0, -baseDepth*0.5,//37
+					baseWidth*0.5+(wallWidth+wallslope), 0, -baseDepth*0.5,//38
+					baseWidth*0.5+(wallWidth+wallslope), wallHeight, -baseDepth*0.5,//39
+					
+					-baseWidth*0.5-(wallWidth+wallslope), 0, -baseDepth*0.5,//40
+					-baseWidth*0.5-(wallWidth+wallslope), -baseThickness, -baseDepth*0.5,//41
+					baseWidth*0.5+(wallWidth+wallslope), -baseThickness, -baseDepth*0.5,//42
+					baseWidth*0.5+(wallWidth+wallslope), 0, -baseDepth*0.5,//43
+					
+					baseWidth*0.5+(wallWidth+wallslope), wallHeight, baseDepth*0.5,//44
+					baseWidth*0.5+(wallWidth+wallslope), 0, baseDepth*0.5,//45
+					baseWidth*0.5, 0, baseDepth*0.5,//46
+					baseWidth*0.5+(wallslope), wallHeight, baseDepth*0.5,//47
+					
+					-baseWidth*0.5-(wallslope), wallHeight, baseDepth*0.5,//48
+					-baseWidth*0.5, 0, baseDepth*0.5,//49
+					-baseWidth*0.5-(wallWidth+wallslope), 0, baseDepth*0.5,//50
+					-baseWidth*0.5-(wallWidth+wallslope), wallHeight, baseDepth*0.5,//51
+					
+					baseWidth*0.5+(wallWidth+wallslope), 0, baseDepth*0.5,//52
+					baseWidth*0.5+(wallWidth+wallslope), -baseThickness, baseDepth*0.5,//53
+					-baseWidth*0.5-(wallWidth+wallslope), -baseThickness, baseDepth*0.5,//54
+					-baseWidth*0.5-(wallWidth+wallslope), 0, baseDepth*0.5,//55
+					
+					
+					
+		
+					
+					];	
+					var indices = [
+					2,1,0,//Fliped
+					3,2,0,//Fliped
+					4,5,6,
+					4,6,7,
+					10,9,8,//Fliped
+					11,10,8,//Fliped
+					14,13,12,//Fliped
+					15,14,12,//Fliped
+					16,17,18,
+					16,18,19,
+					22,21,20,
+					23,22,20,
+					24,25,26,
+					24,26,27,
+					28,29,30,
+					28,30,31,
+					32,33,34,
+					32,34,35,
+					36,37,38,
+					36,38,39,
+					40,41,42,
+					40,42,43,
+					44,45,46,
+					44,46,47,
+					48,49,50,
+					48,50,51,
+					52,53,54,
+					52,54,55,
+					];
+					var normals = [];
+					var uvs = [
+					0,1, 0,0, 1,0, 1,1,
+					0,wHratio, 0,0, 1,0, 1,wHratio,
+					0,1, 0,insideUVyStart, iwallHratio,insideUVyStart, iwallHratio,1,
+					0,1, 0,insideUVyStart, iwallHratio,insideUVyStart, iwallHratio,1,
+					
+					wHratio,1, 0,1, 0,capRatio, wHratio,capRatio,
+					wHratio,1, 0,1, 0,capRatio, wHratio,capRatio,
+					
+					0,1, 0,0, iwallHratio,0, iwallHratio,1,
+					0,1, 0,0, iwallHratio,0, iwallHratio,1,
+					
+					0,1, 0,insideUVyStart*capRatio, wallSlopeUVstop2,insideUVyStart*capRatio, wallSlopeUVstop,1,			
+					1-wallSlopeUVstop*capRatio,1, 1-wallSlopeUVstop2*capRatio,insideUVyStart*capRatio, 1,insideUVyStart*capRatio, 1,1,
+					
+					0,insideUVyStart*capRatio, 0,0, 1,0, 1,insideUVyStart*capRatio,
+					
+					0,1, 0,insideUVyStart*capRatio, wallSlopeUVstop2*capRatio,insideUVyStart*capRatio, wallSlopeUVstop*capRatio,1,
+					1-wallSlopeUVstop*capRatio,1, 1-wallSlopeUVstop2*capRatio,insideUVyStart*capRatio, 1,insideUVyStart*capRatio, 1,1,
+					
+					0,insideUVyStart*capRatio, 0,0, 1,0, 1,insideUVyStart*capRatio,
+					];
+					
+					BABYLON.VertexData.ComputeNormals(positions, indices, normals);
+					
+					var vertexData = new BABYLON.VertexData();
+					vertexData.positions = positions;
+					vertexData.indices = indices; 
+					vertexData.normals = normals; 
+					vertexData.uvs = uvs;
+					vertexData.applyToMesh(hallway);
+					hallway.material = shaderMaterial;
+					
+					/*var lines = BABYLON.Mesh.CreateLines("lines", [
+   					    new BABYLON.Vector3(positions[0], positions[1], positions[2]),
+    				    new BABYLON.Vector3(positions[3], positions[4], positions[5]),
+						new BABYLON.Vector3(positions[6], positions[7], positions[8]),
+						new BABYLON.Vector3(positions[9], positions[10], positions[11]),
+    				   
+					], scene);*/
+					return hallway;
+				};
+		 
+
+        
+		var test = hallway();
+		
+		test.position.y += 1;
+     
+         return scene;
+      };
+      // -------------------------------------------------------------
+   
+      var scene = createScene();
+		scene.debugLayer.show();
+      engine.runRenderLoop(function () {
+         scene.render();
+      });
+     
+      window.addEventListener("resize", function () {
+         engine.resize();
+      });
+   </script>
+</body>
+</html>
